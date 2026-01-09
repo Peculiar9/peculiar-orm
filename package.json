@@ -12,10 +12,21 @@
         "orm",
         "postgresql",
         "active-record",
-        "lightweight"
+        "lightweight",
+        "typescript",
+        "microservices",
+        "database"
     ],
     "author": "Peculiar",
     "license": "ISC",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/peculiar/peculiar-orm.git"
+    },
+    "bugs": {
+        "url": "https://github.com/peculiar/peculiar-orm/issues"
+    },
+    "homepage": "https://github.com/peculiar/peculiar-orm#readme",
     "dependencies": {
         "pg": "^8.11.3",
         "reflect-metadata": "^0.2.2",

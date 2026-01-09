@@ -9,6 +9,13 @@ A lightweight, transparent, and robust Object-Relational Mapper (ORM) for Postgr
 - **Observability**: Detailed metrics on connection usage, query performance, and transaction history.
 - **Dependency Injection**: First-class support for `inversify`.
 
+## Perfect for Microservices
+Lightweight and resilient, `peculiar-orm` is built to thrive in distributed environments:
+- **Zero bloat**: Wraps `pg` directly without the overhead of massive ORM frameworks.
+- **Resilient**: Handles connection drops and query timeouts gracefully, preventing cascading failures.
+- **Observable**: Exposes internal metrics (pool saturation, transaction durations), making it easy to monitor service health.
+- **Stateless-ready**: Transaction manager supports request-scoped transactions, ideal for REST/gRPC handlers.
+
 ## Installation
 
 ```bash
