@@ -1,0 +1,26 @@
+# Source
+src/
+
+# Config not needed for production usage
+tsconfig.json
+.eslintrc*
+.prettierrc*
+jest.config.js
+babel.config.js
+rollup.config.js
+
+# Git/NPM metadata
+.gitignore
+.npmignore
+.git/
+.github/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
