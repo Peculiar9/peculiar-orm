@@ -1,6 +1,6 @@
 {
     "name": "peculiar-orm",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "A lightweight, active-record style ORM for PostgreSQL",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -21,12 +21,12 @@
     "license": "ISC",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/peculiar/peculiar-orm.git"
+        "url": "git+https://github.com/peculiar9/peculiar-orm.git"
     },
     "bugs": {
-        "url": "https://github.com/peculiar/peculiar-orm/issues"
+        "url": "https://github.com/peculiar9/peculiar-orm/issues"
     },
-    "homepage": "https://github.com/peculiar/peculiar-orm#readme",
+    "homepage": "https://github.com/peculiar9/peculiar-orm#readme",
     "dependencies": {
         "pg": "^8.11.3",
         "reflect-metadata": "^0.2.2",

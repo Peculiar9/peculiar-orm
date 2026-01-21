@@ -21,7 +21,7 @@ Lightweight and resilient, `peculiar-orm` is built to thrive in distributed envi
 ```bash
 npm install peculiar-orm pg reflect-metadata inversify
 npm install --save-dev @types/pg
-```
+```--
 
 Ensure you have `experimentalDecorators` and `emitDecoratorMetadata` enabled in your `tsconfig.json`:
 
