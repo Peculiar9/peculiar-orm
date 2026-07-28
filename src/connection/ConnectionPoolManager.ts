@@ -191,7 +191,7 @@ export class ConnectionPoolManager extends EventEmitter {
             };
             this.connectionTimestamps.set(internalConnectionId, connectionDetails);
 
-            Logger.write('Database connection acquired successfully.', LogLevel.INFO, {
+            Logger.write('Database connection acquired successfully.', LogLevel.DEBUG, {
                 context: 'ConnectionPoolManager.getConnection',
                 poolId: this.poolId,
                 internalConnectionId,
@@ -349,7 +349,7 @@ export class ConnectionPoolManager extends EventEmitter {
         delete (client as any)[CONNECTION_ID_SYMBOL];
 
         const finalProcessID = (client as any).processID as number | undefined;
-        Logger.write('Performing client release.', LogLevel.INFO, {
+        Logger.write('Performing client release.', LogLevel.DEBUG, {
             context: 'ConnectionPoolManager.performClientRelease',
             poolId: this.poolId,
             internalConnectionId,

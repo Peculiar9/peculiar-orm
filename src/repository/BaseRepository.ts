@@ -25,7 +25,7 @@ export abstract class BaseRepository<T> implements IRepository<T> {
             const client = this.transactionManager.getClient();
             const result = await client.query<R>(query, params);
 
-            Logger.write('Query executed successfully', LogLevel.INFO, {
+            Logger.write('Query executed successfully', LogLevel.DEBUG, {
                 operation: 'query',
                 table: this.tableName,
                 duration: Date.now() - startTime,
