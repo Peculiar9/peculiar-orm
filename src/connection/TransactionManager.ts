@@ -90,7 +90,7 @@ export class TransactionManager {
             const summary = this.getMetricsSummary();
 
             const longRunningTransactions = this.metrics.transactionHistory
-                .filter(txn => txn.status === 'active' &&
+                .filter(txn => txn.status === 'active' && txn.startTime &&
                     new Date().getTime() - txn.startTime.getTime() > 5 * 60 * 1000);
 
             if (longRunningTransactions.length > 0) {
@@ -155,8 +155,11 @@ export class TransactionManager {
             this.metrics.activeTransactions++;
 
             this.metrics.transactionHistory.push({
+                // Never record a null startTime: the entry type requires a Date,
+                // and transactionStartTime can be reset to null by a concurrent
+                // transaction on a shared manager. Fall back to now.
                 transactionId,
-                startTime: this.transactionStartTime,
+                startTime: this.transactionStartTime ?? new Date(),
                 status: 'active',
                 isolationLevel: options?.isolationLevel,
                 readOnly: options?.readOnly
@@ -323,7 +326,7 @@ export class TransactionManager {
 
     private getLongRunningTransactions(): any[] {
         return this.metrics.transactionHistory
-            .filter(txn => txn.status === 'active')
+            .filter(txn => txn.status === 'active' && txn.startTime)
             .map(txn => {
                 const durationMs = new Date().getTime() - txn.startTime.getTime();
                 return {
