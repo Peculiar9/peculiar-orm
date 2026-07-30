@@ -84,6 +84,13 @@ export class TransactionManager {
     }
 
     private startMetricsLogging(): void {
+        // Opt-in. A TransactionManager is typically request-scoped, so starting a
+        // per-instance interval here leaks a 60s timer on every request (it holds
+        // the manager + its history alive and is never disposed). The singleton
+        // ConnectionPoolManager already reports metrics; enable this only when the
+        // manager itself is a singleton, via PECULIAR_ORM_TX_METRICS=true.
+        if (process.env.PECULIAR_ORM_TX_METRICS !== 'true') return;
+
         const metricsId = `metric_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`;
 
         this.metricsLoggingInterval = setInterval(() => {
@@ -105,6 +112,8 @@ export class TransactionManager {
                 });
             }
         }, 60000);
+        // Even when enabled, never let the metrics timer keep the process alive.
+        this.metricsLoggingInterval?.unref?.();
     }
 
     public isActive(): boolean {
