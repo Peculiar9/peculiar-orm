@@ -34,6 +34,11 @@ interface ConnectionTimestamp {
 }
 
 const CONNECTION_ID_SYMBOL = Symbol('connectionId');
+// Marks a physical client that already has our 'error' listener attached. pg
+// reuses clients across acquire/release, so without this guard a fresh listener
+// would be added on every getConnection and never removed — a slow leak that
+// trips Node's MaxListenersExceededWarning under load.
+const ERROR_HANDLER_SYMBOL = Symbol('cpmErrorHandlerAttached');
 
 @injectable()
 export class ConnectionPoolManager extends EventEmitter {
@@ -200,19 +205,25 @@ export class ConnectionPoolManager extends EventEmitter {
                 activeLeased: this.metrics.activeLeasedConnections,
             });
 
-            client.on('error', (err: Error) => {
-                const currentConnectionId = (client as any)[CONNECTION_ID_SYMBOL] || 'unknown_after_error';
-                const currentProcessID = (client as any).processID as number | undefined;
-                Logger.write('Error on active client. Connection will be forcibly released.', LogLevel.ERROR, {
-                    context: 'ConnectionPoolManager.client.on.error',
-                    poolId: this.poolId,
-                    internalConnectionId: currentConnectionId,
-                    processID: currentProcessID,
-                    error: err.message,
-                    stack: err.stack,
+            // Attach the error listener once per physical client — pg reuses
+            // clients across acquire/release, so re-adding it each getConnection
+            // leaks listeners. The handler stays valid for every subsequent lease.
+            if (!(client as any)[ERROR_HANDLER_SYMBOL]) {
+                (client as any)[ERROR_HANDLER_SYMBOL] = true;
+                client.on('error', (err: Error) => {
+                    const currentConnectionId = (client as any)[CONNECTION_ID_SYMBOL] || 'unknown_after_error';
+                    const currentProcessID = (client as any).processID as number | undefined;
+                    Logger.write('Error on active client. Connection will be forcibly released.', LogLevel.ERROR, {
+                        context: 'ConnectionPoolManager.client.on.error',
+                        poolId: this.poolId,
+                        internalConnectionId: currentConnectionId,
+                        processID: currentProcessID,
+                        error: err.message,
+                        stack: err.stack,
+                    });
+                    this.performClientRelease(client, err);
                 });
-                this.performClientRelease(client, err);
-            });
+            }
 
             const originalQuery = client.query;
             const originalRelease = client.release.bind(client);
