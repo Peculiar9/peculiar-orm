@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-09-26
+
+### Fixed
+- `BaseRepository.executeQuery` no longer requires the transaction manager to have `isStandalone`. Applications unit-test repositories against hand written fakes, and a fake written before 1.1 broke with "isStandalone is not a function". Absent now means "not a standalone lease".
+- The published package carries only `dist`, the README, the changelog and the licence (`files` in `package.json`); 1.1.0 shipped the test folder as well.
+
 ## [1.1.0] - 2026-09-26
 
 ### Added

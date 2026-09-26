@@ -29,7 +29,10 @@ export abstract class BaseRepository<T> implements IRepository<T> {
 
     protected async executeQuery<R extends QueryResultRow = any>(query: string, params: any[] = []): Promise<QueryResult<R>> {
         const startTime = Date.now();
-        if (this.transactionManager.isStandalone() && !BaseRepository.READ_ONLY_LEADS.test(query)) {
+        // Optional call on purpose: consumers unit-test repositories against hand
+        // written fakes of the manager, and a fake from before 1.1 has no
+        // isStandalone. Absent means "not a standalone lease".
+        if (this.transactionManager.isStandalone?.() && !BaseRepository.READ_ONLY_LEADS.test(query)) {
             throw new OrmError(
                 'A standalone read attempted to write. Run this statement inside a transaction.'
             );

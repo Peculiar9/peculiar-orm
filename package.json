@@ -1,6 +1,6 @@
 {
     "name": "peculiar-orm",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "A lightweight, active-record style ORM for PostgreSQL",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -36,5 +36,11 @@
         "@types/node": "^20.10.5",
         "@types/pg": "^8.10.9",
         "typescript": "^5.3.3"
-    }
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE"
+    ]
 }

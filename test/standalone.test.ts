@@ -115,3 +115,17 @@ describe('runStandalone: a lease with no transaction', () => {
         })).rejects.toThrow();
     });
 });
+
+describe('compatibility with hand written fakes', () => {
+    it('a fake transaction manager without isStandalone still serves queries', async () => {
+        const sent: string[] = [];
+        const fake = {
+            getClient: () => ({ query: async (text: string) => { sent.push(text); return { rows: [], rowCount: 0 }; } }),
+            getTransactionId: () => 'fake',
+            isActive: () => true,
+        } as any;
+        const users = new Users(fake);
+        await users.read('UPDATE users SET x = 1');     // inside a (fake) transaction: allowed
+        expect(sent).toEqual(['UPDATE users SET x = 1']);
+    });
+});
