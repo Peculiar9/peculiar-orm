@@ -1,4 +1,4 @@
-import { PoolConfig } from 'pg';
+import type { PoolConfig } from 'pg';
 
 export enum DatabaseIsolationLevel {
     READ_UNCOMMITTED = 'READ UNCOMMITTED',

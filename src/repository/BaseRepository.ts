@@ -1,4 +1,4 @@
-import { QueryResult, QueryResultRow } from 'pg';
+import type { QueryResult, QueryResultRow } from 'pg';
 import { IRepository } from './IRepository';
 import { TransactionManager } from '../connection/TransactionManager';
 import { Logger, LogLevel } from '../utils/Logger';
@@ -14,6 +14,14 @@ export abstract class BaseRepository<T> implements IRepository<T> {
     protected readonly tableName: string;
     protected transactionManager: TransactionManager;
 
+    /**
+     * Statements a standalone lease may send. Inside a READ ONLY transaction
+     * Postgres would refuse a write with SQLSTATE 25006; a standalone lease has
+     * no transaction, so a write would auto-commit. The refusal moves here, and
+     * it happens BEFORE anything is sent.
+     */
+    private static readonly READ_ONLY_LEADS = /^\s*\(*\s*(SELECT|WITH|SHOW|EXPLAIN|VALUES|TABLE)\b/i;
+
     constructor(transactionManager: TransactionManager, tableName: string) {
         this.transactionManager = transactionManager;
         this.tableName = tableName;
@@ -21,6 +29,11 @@ export abstract class BaseRepository<T> implements IRepository<T> {
 
     protected async executeQuery<R extends QueryResultRow = any>(query: string, params: any[] = []): Promise<QueryResult<R>> {
         const startTime = Date.now();
+        if (this.transactionManager.isStandalone() && !BaseRepository.READ_ONLY_LEADS.test(query)) {
+            throw new OrmError(
+                'A standalone read attempted to write. Run this statement inside a transaction.'
+            );
+        }
         try {
             const client = this.transactionManager.getClient();
             const result = await client.query<R>(query, params);

@@ -1,4 +1,5 @@
-import { Pool, PoolClient, PoolConfig } from 'pg';
+import { Pool } from 'pg';
+import type { PoolClient, PoolConfig } from 'pg';
 import { EventEmitter } from 'events';
 import { injectable } from 'inversify';
 import { Logger, LogLevel } from '../utils/Logger';

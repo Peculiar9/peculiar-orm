@@ -161,6 +161,28 @@ Handles the lifecycle of a database transaction.
 - `rollback()`: Rolls back changes.
 - `getMetrics()`: Returns stats on active/committed/rolled-back transactions.
 
+### Reads without a transaction
+
+At `READ COMMITTED`, wrapping a `SELECT` in `BEGIN` and `COMMIT` buys nothing: each statement takes its own snapshot either way. It only adds round trips and holds the pooled connection longer. So reads take a lease instead:
+
+```typescript
+// one round trip, no BEGIN, no COMMIT; repositories are unchanged
+const user = await transactionManager.runStandalone(() => users.findById(id));
+```
+
+While the lease is held, `BaseRepository.executeQuery` refuses anything that is not a `SELECT`, `WITH`, `SHOW`, `EXPLAIN`, `VALUES` or `TABLE` statement, before it is sent. Called inside an open transaction, `runStandalone` joins it. For several reads that must agree with each other, open a `REPEATABLE READ` transaction; that is the one case a transaction gives a read something.
+
+Writes still use a transaction, and `beginTransaction` now sends it as one statement:
+
+```typescript
+await transactionManager.beginTransaction({
+    isolationLevel: DatabaseIsolationLevel.READ_COMMITTED,
+    readOnly: false,
+    localSettings: ['idle_in_transaction_session_timeout = 60000'],
+});
+// → BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE; SET LOCAL idle_in_transaction_session_timeout = 60000
+```
+
 ### BaseRepository
 A foundation for your repositories.
 - **`executeQuery<T>(sql, params)`**: Wraps `pg` query execution with logging and standardized error handling (maps PG error codes to `DatabaseConstraintError`, `DatabaseConnectionError`, etc.).

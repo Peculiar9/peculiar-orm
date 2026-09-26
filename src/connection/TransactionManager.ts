@@ -1,4 +1,4 @@
-import { PoolClient } from 'pg';
+import type { PoolClient } from 'pg';
 import { ConnectionPoolManager } from './ConnectionPoolManager';
 import { injectable, inject } from 'inversify';
 import { Logger, LogLevel } from '../utils/Logger';
@@ -10,9 +10,16 @@ export const PECULIAR_ORM_TYPES = {
     ConnectionPoolManager: Symbol.for('ConnectionPoolManager'),
 };
 
-interface TransactionOptions {
+export interface TransactionOptions {
     isolationLevel?: DatabaseIsolationLevel;
     readOnly?: boolean;
+    /**
+     * Transaction-local settings applied in the SAME round trip as BEGIN, as
+     * `SET LOCAL <setting>` statements, e.g. `'idle_in_transaction_session_timeout = 60000'`.
+     * They expire with the transaction. These are spliced into SQL verbatim, so
+     * they must be application constants, never user input.
+     */
+    localSettings?: string[];
 }
 
 interface TransactionMetrics {
@@ -22,6 +29,8 @@ interface TransactionMetrics {
     committedTransactions: number;
     rolledBackTransactions: number;
     failedTransactions: number;
+    /** Transaction-less leases taken through `runStandalone`. */
+    standaloneLeases: number;
     transactionDurations: number[];
     lastMetricsResetTime: Date;
     transactionHistory: Array<{
@@ -40,6 +49,8 @@ interface TransactionMetrics {
 export class TransactionManager {
     private client: PoolClient | null = null;
     private isTransactionActive = false;
+    /** True while `runStandalone` holds a pooled client with no transaction open. */
+    private standalone = false;
     private poolManager: ConnectionPoolManager;
     private requestId: string;
     private metrics: TransactionMetrics = {
@@ -49,6 +60,7 @@ export class TransactionManager {
         committedTransactions: 0,
         rolledBackTransactions: 0,
         failedTransactions: 0,
+        standaloneLeases: 0,
         transactionDurations: [],
         lastMetricsResetTime: new Date(),
         transactionHistory: []
@@ -120,10 +132,69 @@ export class TransactionManager {
         return this.isTransactionActive;
     }
 
+    /** True while a standalone (transaction-less) lease is held. */
+    public isStandalone(): boolean {
+        return this.standalone;
+    }
+
+    /**
+     * The BEGIN for a set of options, as one statement. Exposed for tests.
+     *
+     *   BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY; SET LOCAL idle_in_transaction_session_timeout = 60000
+     */
+    public static beginStatement(options?: TransactionOptions): string {
+        const modes: string[] = [];
+        if (options?.isolationLevel) modes.push(`ISOLATION LEVEL ${options.isolationLevel}`);
+        if (options?.readOnly !== undefined) modes.push(options.readOnly ? 'READ ONLY' : 'READ WRITE');
+        const begin = modes.length ? `BEGIN ${modes.join(' ')}` : 'BEGIN';
+        const locals = (options?.localSettings ?? []).map((setting) => `SET LOCAL ${setting}`);
+        return [begin, ...locals].join('; ');
+    }
+
+    /**
+     * Lease one pooled connection for the duration of `fn` with NO transaction
+     * open: every statement auto-commits, and each is a single round trip.
+     *
+     * Made for reads. At READ COMMITTED a transaction gives a read nothing it
+     * does not already have (each statement takes its own snapshot either way),
+     * so wrapping one SELECT in BEGIN and COMMIT only adds round trips and holds
+     * the connection longer. Repositories do not change: `getClient()` hands
+     * back the leased client, and `BaseRepository.executeQuery` refuses to send
+     * a write while the lease is standalone.
+     *
+     * Inside an open transaction, or inside another standalone lease, `fn`
+     * simply joins it, so a read called from within a write still sees that
+     * write's own uncommitted rows.
+     *
+     * The `finally` is the leak guard: there is no transaction to time out, and
+     * the client goes back to the pool however `fn` ends.
+     */
+    public async runStandalone<T>(fn: () => Promise<T>): Promise<T> {
+        if (this.isTransactionActive || this.standalone) return fn();
+        if (this.client) throw new OrmError('A client is already held on this transaction manager');
+
+        this.client = await this.poolManager.getConnection();
+        this.standalone = true;
+        this.metrics.standaloneLeases++;
+        try {
+            return await fn();
+        } finally {
+            this.standalone = false;
+            this.releaseClient();
+        }
+    }
+
     public async beginTransaction(options?: TransactionOptions): Promise<void> {
         const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         this.requestId = transactionId;
         this.currentTransactionOptions = options;
+
+        if (this.standalone) {
+            // The manager holds one client. A transaction opened here would lease
+            // a second one and orphan the lease, which is exactly the leak the
+            // lease's `finally` exists to prevent.
+            throw new OrmError('Cannot begin a transaction inside a standalone lease; use it, or end it first');
+        }
 
         if (this.isTransactionActive) {
             const err = new OrmError('Transaction already in progress');
@@ -150,15 +221,11 @@ export class TransactionManager {
 
         try {
             this.client = await this.poolManager.getConnection(options);
-            await this.client.query('BEGIN');
-
-            if (options?.isolationLevel) {
-                await this.client.query(`SET TRANSACTION ISOLATION LEVEL ${options.isolationLevel}`);
-            }
-
-            if (options?.readOnly !== undefined) {
-                await this.client.query(options.readOnly ? 'SET TRANSACTION READ ONLY' : 'SET TRANSACTION READ WRITE');
-            }
+            // One round trip, not four. Postgres takes the transaction modes on
+            // BEGIN itself, and a parameterless query goes over the simple
+            // protocol, which carries several statements in one message. The
+            // SET LOCALs land inside the transaction just opened.
+            await this.client.query(TransactionManager.beginStatement(options));
 
             this.isTransactionActive = true;
             this.metrics.activeTransactions++;
@@ -283,7 +350,7 @@ export class TransactionManager {
     }
 
     public getClient(): PoolClient {
-        if (!this.client || !this.isTransactionActive) {
+        if (!this.client || !(this.isTransactionActive || this.standalone)) {
             throw new OrmError('No active transaction client');
         }
         return this.client;
@@ -322,6 +389,7 @@ export class TransactionManager {
             committedTransactions: 0,
             rolledBackTransactions: 0,
             failedTransactions: 0,
+            standaloneLeases: 0,
             transactionDurations: [],
             lastMetricsResetTime: new Date(),
             transactionHistory: this.metrics.transactionHistory.filter(t => t.status === 'active')
